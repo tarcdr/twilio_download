@@ -1,0 +1,9 @@
+node_modules
+recordings
+recordings-*
+.DS_Store
+uploads/
+package-lock.json
+.env
+test-script.xlsx
+resource
