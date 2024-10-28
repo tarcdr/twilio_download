@@ -101,6 +101,74 @@ const downloadRecording = async (refCode, outputDir) => {
   }
 };
 
+const fetchDownloading = async (results, refCodes, rooms, outputDir) => {
+  if (rooms?.length > 0) {
+    console.log(`rooms (${rooms.length})`);
+    for (const room of rooms) {
+      const refCode = room.uniqueName;
+      console.log(`read refCode = ${refCode}`);
+      if (refCodes.includes(refCode) || Object.values(results).map(o => o.refCode).includes(refCode)) {
+        console.log(`refCode existing (${refCode})`);
+        continue;
+      }
+      const result = { refCode, status: '' };
+      console.log(`Room SID: ${room.sid}, Room Name: ${room.uniqueName}, Status: ${room.status}`);
+      const refCodeOutputDir = path.join(outputDir, refCode);
+      await fs.ensureDir(refCodeOutputDir);
+
+      const status = await downloadRecording(refCode, refCodeOutputDir);
+
+      if (status === 'error') {
+        await fs.remove(refCodeOutputDir); // ลบไฟล์ที่เสียหายออก
+        console.log(`Removed corrupted files for refCode: ${refCode}`);
+      } else if (status === 'no room') {
+        await fs.remove(refCodeOutputDir); // // ลบ Folder ที่ Error ออก
+      }
+      results.push(result);
+    }
+  } else {
+    console.error('Not found rooms');
+  }
+  return results;
+};
+
+const testTwilio = async (excelFilePath, outputDir) => {
+  const readFile = readExcelFile(excelFilePath);
+  console.log(`read file ${excelFilePath}`);
+  const refCodes = readFile.map(o => o.refCode);
+  let results = [];
+  let timer = null;
+  try {
+    let currentPage = await client.video.rooms.page({ status: 'completed', pageSize: 5 });
+
+    // วนลูปจนกว่าจะหมดหน้า
+    while (currentPage) {
+      console.log('Rooms on Current Page:');
+      currentPage.instances.forEach(room => {
+        console.log(`Room SID: ${room.sid}, Room Name: ${room.uniqueName}, Status: ${room.status}`);
+      });
+      const rooms = currentPage.instances;
+      results = await fetchDownloading(results, refCodes, rooms, outputDir);
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        // เขียนผลลัพธ์กลับไปที่ไฟล์ .xlsx แทนไฟล์เดิม
+        console.log('Write to excel file');
+        const excelFilePathExport = `${excelFilePath.replace('.xlsx', '')}-export.xlsx`
+        writeToExcelFile(excelFilePathExport, Object.values(results));
+      }, 10000);
+
+      // ตรวจสอบว่ามีหน้าถัดไปหรือไม่
+      if (currentPage.nextPageUrl) {
+        currentPage = await currentPage.nextPage(); // ดึงข้อมูลหน้าถัดไป
+      } else {
+        currentPage = null; // ไม่มีหน้าถัดไปแล้ว หยุดลูป
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching rooms:', error);
+  }
+};
+
 // ฟังก์ชันหลักสำหรับการจัดการ refCode และดาวน์โหลดไฟล์
 const processRefCodes = async (excelFilePath, outputDir) => {
   const refCodes = readExcelFile(excelFilePath);
@@ -161,8 +229,9 @@ const processRefCodes = async (excelFilePath, outputDir) => {
 
 // เริ่มการทำงาน
 (async () => {
-  const excelFilePath = './resource/refcode.xlsx'; // เส้นทางไฟล์ Excel
+  const excelFilePath = './resource/daz.xlsx'; // เส้นทางไฟล์ Excel
   const outputDir = './recordings'; // เส้นทางโฟลเดอร์ที่ต้องการเก็บไฟล์
 
-  await processRefCodes(excelFilePath, outputDir);
+  // await processRefCodes(excelFilePath, outputDir);
+  await testTwilio(excelFilePath, outputDir);
 })();
