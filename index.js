@@ -103,7 +103,6 @@ const downloadRecording = async (refCode, outputDir) => {
 
 const fetchDownloading = async (results, refCodes, rooms, outputDir) => {
   if (rooms?.length > 0) {
-    console.log(`rooms (${rooms.length})`);
     for (const room of rooms) {
       const refCode = room.uniqueName;
       console.log(`read refCode = ${refCode}`);
@@ -124,6 +123,7 @@ const fetchDownloading = async (results, refCodes, rooms, outputDir) => {
       } else if (status === 'no room') {
         await fs.remove(refCodeOutputDir); // // ลบ Folder ที่ Error ออก
       }
+      result.status = status
       results.push(result);
     }
   } else {
@@ -139,14 +139,14 @@ const testTwilio = async (excelFilePath, outputDir) => {
   let results = [];
   let timer = null;
   try {
-    let currentPage = await client.video.rooms.page({ status: 'completed', pageSize: 5 });
+    let currentPage = await client.video.rooms.page({ status: 'completed', pageSize: 100 });
 
     // วนลูปจนกว่าจะหมดหน้า
     while (currentPage) {
-      console.log('Rooms on Current Page:');
-      currentPage.instances.forEach(room => {
-        console.log(`Room SID: ${room.sid}, Room Name: ${room.uniqueName}, Status: ${room.status}`);
-      });
+      // console.log('Rooms on Current Page:');
+      // currentPage.instances.forEach(room => {
+      //   console.log(`Room SID: ${room.sid}, Room Name: ${room.uniqueName}, Status: ${room.status}`);
+      // });
       const rooms = currentPage.instances;
       results = await fetchDownloading(results, refCodes, rooms, outputDir);
       clearTimeout(timer);
